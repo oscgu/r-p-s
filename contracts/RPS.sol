@@ -2,8 +2,8 @@
 pragma solidity ^0.8.9;
 
 contract Rps {
-    // address public constant OWNER = ;
-    // uint constant MIN_BET = ;
+    /* address public constant OWNER = ; */
+    /* uint constant MIN_BET = ; */
     uint8 public constant TAX_PERCENT = 5;
     uint constant REVEAL_TIMEOUT = 48 hours;
 
@@ -167,7 +167,7 @@ contract Rps {
             return Choices.SCISSORS;
         }
 
-        revert("Invalid choice");
+        revert("Invalid choice"); /* Handle it better */
     }
 
     function timerRanOut(uint timerStart) private view returns (bool){
