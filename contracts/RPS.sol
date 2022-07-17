@@ -110,6 +110,7 @@ contract Rps {
         require(pWagers.length != 0, "No wagers to be removed");
         require(pWagers.length - 1 <= wagerIndex, "Index out of bounds");
 
+        /*   Duplicate Code                       */
         if (pWagers[wagerIndex].hasP2) {
             payWinner(pWagers[wagerIndex].p2, pWagers[wagerIndex].tokenAmmount);
         }
@@ -124,6 +125,7 @@ contract Rps {
         require(pWagers.length != 0, "No wagers to be removed");
         require(pWagers.length - 1 <= wagerIndex, "Index out of bounds");
 
+        /* see above */
         if (pWagers[wagerIndex].hasP2) {
             payWinner(pWagers[wagerIndex].p2, pWagers[wagerIndex].tokenAmmount);
         }
@@ -144,6 +146,7 @@ contract Rps {
         return Winner.P2;
     }
 
+    /* Better name: forfeit? */
     function payWinner(address winner, uint256 ammount) private {
         require(address(this).balance > ammount, "Not enough cash 4");
         payable(winner).transfer((ammount * 2) - (((ammount * 2) / 100) * TAX_PERCENT));
