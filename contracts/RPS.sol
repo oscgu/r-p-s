@@ -3,6 +3,7 @@ pragma solidity ^0.8.9;
 
 contract Rps {
     // address public constant OWNER = ;
+    // uint constant MIN_BET = ;
     uint8 public constant TAX_PERCENT = 5;
     uint constant REVEAL_TIMEOUT = 48 hours;
 
@@ -21,27 +22,22 @@ contract Rps {
 
     struct Wager {
         uint256 tokenAmmount;
-        string p1EncryptedRPSChoice;
+        bytes32 p1EncryptedRPSChoice;
+
         bool hasP2;
         address p2;
         Choices p2Choice;
+
         uint timerStart;
     }
 
     struct Player {
-        address payable pAddress;
         Wager[] wagers;
     }
 
-    function listWagers() public view returns(Wager[] memory) {
-        return players[msg.sender].wagers;
-    }
+    mapping(address => Player) players;
 
-    function listWager(uint256 wagerIndex) public view returns(Wager memory) {
-        return players[msg.sender].wagers[wagerIndex];
-    }
-
-    function mkWager(string memory encChoice) public payable {
+    function mkWager(bytes32 encChoice) public payable {
         Wager memory wager;
         wager.hasP2 = false;
         wager.tokenAmmount = msg.value;
@@ -49,8 +45,6 @@ contract Rps {
 
         players[msg.sender].wagers.push(wager);
     }
-
-    mapping(address => Player) players;
 
     function joinWager(address p1, uint8 wagerIndex, Choices p2Choice) public payable {
         Wager[] storage p1Wagers = players[p1].wagers;
@@ -66,10 +60,6 @@ contract Rps {
         wager.timerStart = block.timestamp;
     }
 
-    function timerRanOut(uint timerStart) public view returns (bool){
-        return block.timestamp > timerStart + REVEAL_TIMEOUT;
-    }
-
     function resolveWagerP1(uint256 wagerIndex, string memory movePw) public {
         Wager[] storage pWagers = players[msg.sender].wagers;
         require(pWagers.length >= wagerIndex, "Index out of bounds");
@@ -77,9 +67,11 @@ contract Rps {
         Wager storage wager = pWagers[wagerIndex];
         require(wager.hasP2, "Wager doesn't have a second player");
 
-        Choices p1Choice = getChoiceFromMovePw(wager.p1EncryptedRPSChoice, movePw);
+        Choices p1Choice = getHashChoice(wager.p1EncryptedRPSChoice, movePw);
         Winner winner = chooseWinner(p1Choice, wager.p2Choice);
         payOut(msg.sender, wager.p2, winner, wager.tokenAmmount);
+
+        wager.hasP2 = false;
         rmWager(msg.sender, wagerIndex);
     }
 
@@ -96,47 +88,20 @@ contract Rps {
         rmWager(p1, wagerIndex);
     }
 
-    event WonAgainst(address indexed winner, address indexed loser);
     function payOut(address p1, address p2, Winner outcome, uint256 ammount) private {
+        uint256 winnings = (ammount * 2) - (((ammount * 2) / 100) * TAX_PERCENT);
+
         if (outcome == Winner.P1) {
-            emit WonAgainst(p1, p2);
-            require(address(this).balance > ammount, "Not enough cash 1");
-            payable(p1).transfer(((ammount * 100) * 2) / (100 + TAX_PERCENT));
+            require(address(this).balance > winnings, "Not enough money in contract");
+            payable(p1).transfer(winnings);
         } else if (outcome == Winner.P2) {
-            emit WonAgainst(p2, p1);
-            require(address(this).balance > ammount, "Not enough cash 2");
-            payable(p2).transfer(((ammount * 100) * 2) / (100 + TAX_PERCENT));
+            require(address(this).balance > winnings, "Not enough money in contract");
+            payable(p2).transfer(winnings);
         } else if (outcome == Winner.DRAW) {
-            payable(p1).transfer(((ammount * 100)) / (100 + TAX_PERCENT));
-            payable(p2).transfer(((ammount * 100)) / (100 + TAX_PERCENT));
+            require(address(this).balance > winnings, "Not enough money in contract");
+            payable(p1).transfer(winnings / 2);
+            payable(p2).transfer(winnings / 2);
         }
-    }
-
-
-    function payWinner(address winner, uint256 ammount) private {
-        require(address(this).balance > ammount, "Not enough cash 3");
-        payable(winner).transfer((ammount * 100) / (100 + TAX_PERCENT));
-    }
-
-
-    function getChoiceFromMovePw(string memory encChoice, string memory choicePw) public pure returns (Choices) {
-        bytes32 a = sha256(abi.encodePacked(encChoice));
-        bytes32 b = sha256(abi.encodePacked(choicePw));
-        require(a == b, "Password doesnt match encoded one");
-
-        return getIntChoice(choicePw);
-    }
-
-    function getIntChoice(string memory str) private pure returns(Choices) {
-        bytes1 first = bytes(str)[0];
-
-        if (first == 0x30) {
-            return Choices.ROCK;
-        } else if (first == 0x31) {
-            return Choices.PAPER;
-        }
-
-        return Choices.SCISSORS;
     }
 
     /* internal */
@@ -150,6 +115,7 @@ contract Rps {
         }
 
         pWagers[wagerIndex] = pWagers[pWagers.length - 1];
+        pWagers.pop();
     }
 
     /* for the player */
@@ -163,6 +129,7 @@ contract Rps {
         }
 
         pWagers[wagerIndex] = pWagers[pWagers.length - 1];
+        pWagers.pop();
     }
 
     function chooseWinner(Choices _p1, Choices _p2) private view returns(Winner winner) {
@@ -175,5 +142,53 @@ contract Rps {
         }
         
         return Winner.P2;
+    }
+
+    function payWinner(address winner, uint256 ammount) private {
+        require(address(this).balance > ammount, "Not enough cash 4");
+        payable(winner).transfer((ammount * 2) - (((ammount * 2) / 100) * TAX_PERCENT));
+    }
+
+    function getHashChoice(bytes32 hashChoice, string memory clearChoice) public pure returns (Choices) {
+        bytes32 hashedClearChoice = sha256(abi.encodePacked(clearChoice));
+        require(hashChoice == hashedClearChoice, "Password doesnt match encoded one");
+
+        return getChoiceFromStr(clearChoice);
+    }
+
+    function getChoiceFromStr(string memory str) private pure returns(Choices) {
+        bytes1 first = bytes(str)[0];
+
+        if (first == 0x31) {
+            return Choices.ROCK;
+        } else if (first == 0x32) {
+            return Choices.PAPER;
+        } else if (first == 0x33) {
+            return Choices.SCISSORS;
+        }
+
+        revert("Invalid choice");
+    }
+
+    function timerRanOut(uint timerStart) private view returns (bool){
+        return block.timestamp > timerStart + REVEAL_TIMEOUT;
+    }
+
+    function getBalance() public view returns (uint256) {
+        return address(this).balance;
+    }
+
+    function listWagers() public view returns(Wager[] memory) {
+        return players[msg.sender].wagers;
+    }
+
+    function listWager(uint256 wagerIndex) public view returns(Wager memory) {
+        return players[msg.sender].wagers[wagerIndex];
+    }
+
+    function getTimeLeft(address p, uint wagerIndex) public view returns(uint) {
+        require(!timerRanOut(players[p].wagers[wagerIndex].timerStart), "Timer already finished");
+        require(players[p].wagers[wagerIndex].hasP2, "Timer didn't start yet");
+        return REVEAL_TIMEOUT - (block.timestamp - players[p].wagers[wagerIndex].timerStart);
     }
 }
