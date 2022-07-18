@@ -54,7 +54,7 @@ contract Rps {
         Wager storage wager = p1Wagers[wagerIndex];
         require(p1 != msg.sender, "You can't join your own game");
         require(!wager.hasP2, "Wager already has a second player");
-        require(wager.tokenAmmount < msg.value, "Tokenammount to low");
+        require(msg.value >= wager.tokenAmmount, "Tokenammount to low");
 
         wager.hasP2 = true;
         wager.p2 = msg.sender;
@@ -187,5 +187,12 @@ contract Rps {
         require(!timerRanOut(wager.timerStart), "Timer already finished");
         require(wager.hasP2, "Timer didn't start yet");
         return REVEAL_TIMEOUT - (block.timestamp - wager.timerStart);
+    }
+
+    function getWagerTokenammount(address player, uint wagerIndex) public view returns(uint) {
+        Wager[] memory wagers = players[player].wagers;
+        require(wagers.length - 1 >= wagerIndex);
+        Wager memory wager = wagers[wagerIndex];
+        return wager.tokenAmmount;
     }
 }
