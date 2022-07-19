@@ -150,18 +150,22 @@ contract Rps {
     }
 
     /* Clear password = str */
-    function getChoiceFromStr(string memory str) private pure returns(Choices) {
+    function getChoiceFromStr(string memory str) public pure returns(Choices) {
         bytes1 first = bytes(str)[0];
 
-        if (first == 0x31) {
+        if (first == 0x30) {
             return Choices.ROCK;
-        } else if (first == 0x32) {
+        } else if (first == 0x31) {
             return Choices.PAPER;
-        } else if (first == 0x33) {
+        } else if (first == 0x32) {
             return Choices.SCISSORS;
         }
 
-        return Choices.ROCK; /* Handle it better */
+        revert("Invalid choice");
+    }
+
+    function returnFirstByte(string memory str) public pure returns(bytes1) {
+        return bytes(str)[0];
     }
 
     function timerRanOut(uint timerStart) private view returns (bool){
