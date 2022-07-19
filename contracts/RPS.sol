@@ -48,10 +48,10 @@ contract Rps {
     }
 
     function joinWager(address p1, uint8 wagerIndex, Choices p2Choice) public payable {
-        Wager[] storage p1Wagers = players[p1].wagers;
-        require(p1Wagers.length - 1 >= wagerIndex, "Index out of bounds");
+        Wager[] storage wagers = players[p1].wagers;
+        require(wagers.length >= wagerIndex + 1, "Index out of bounds");
 
-        Wager storage wager = p1Wagers[wagerIndex];
+        Wager storage wager = wagers[wagerIndex];
         require(p1 != msg.sender, "You can't join your own game");
         require(!wager.hasP2, "Wager already has a second player");
         require(msg.value >= wager.tokenAmmount, "Tokenammount to low");
@@ -63,69 +63,53 @@ contract Rps {
     }
 
     function resolveWagerP1(uint256 wagerIndex, string memory movePw) public {
-        Wager[] storage pWagers = players[msg.sender].wagers;
-        require(pWagers.length - 1 >= wagerIndex, "Index out of bounds");
+        Wager[] storage wagers = players[msg.sender].wagers;
+        require(wagers.length >= wagerIndex + 1, "Index out of bounds");
 
-        Wager storage wager = pWagers[wagerIndex];
+        Wager storage wager = wagers[wagerIndex];
         require(wager.hasP2, "Wager doesn't have a second player");
 
         Choices p1Choice = getHashChoice(wager.p1EncryptedRPSChoice, movePw);
         Winner winner = chooseWinner(p1Choice, wager.p2Choice);
-        payOut(msg.sender, wager.p2, winner, wager.tokenAmmount);
+
+        rewardWinner(msg.sender, wager.p2, winner, wager.tokenAmmount);
         rmWager(msg.sender, wagerIndex);
     }
 
     function resolveWagerP2(address p1, uint256 wagerIndex) public {
-        Wager[] storage pWagers = players[p1].wagers;
-        require(pWagers.length - 1 >= wagerIndex, "Index out of bounds");
+        Wager[] storage wagers = players[p1].wagers;
+        require(wagers.length >= wagerIndex + 1, "Index out of bounds");
 
-        Wager storage wager = pWagers[wagerIndex];
+        Wager storage wager = wagers[wagerIndex];
         require(wager.hasP2, "Wager doesn't have a second player");
-        require(timerRanOut(wager.timerStart), "Timer didn't run out yet");
+        require(didTimerRunOut(wager.timerStart), "Timer didn't run out yet");
 
-        handleForfeit(msg.sender, wager.tokenAmmount);
+        payoutWithAppliedTax(msg.sender, wager.tokenAmmount);
         rmWager(p1, wagerIndex);
     }
 
-    function payOut(address p1, address p2, Winner outcome, uint256 ammount) private {
-        uint256 winnings = (ammount * 2) - (((ammount * 2) / 100) * TAX_PERCENT);
-        require(address(this).balance > winnings, "Not enough money in contract");
-
-        if (outcome == Winner.P1) {
-            payable(p1).transfer(winnings);
-        } else if (outcome == Winner.P2) {
-            payable(p2).transfer(winnings);
-        } else if (outcome == Winner.DRAW) {
-            payable(p1).transfer(winnings / 2);
-            payable(p2).transfer(winnings / 2);
+    function rewardWinner(address p1, address p2, Winner winner, uint256 ammount) public {
+        if (winner == Winner.P1) {
+            payoutWithAppliedTax(p1, ammount);
+        } else if (winner == Winner.P2) {
+            payoutWithAppliedTax(p2, ammount);
+        } else if (winner == Winner.DRAW) {
+            payoutWithAppliedTax(p1, ammount / 2);
+            payoutWithAppliedTax(p2, ammount / 2);
         }
     }
 
     /* internal */
-    function rmWager(address p1,  uint256 wagerIndex) private {
-        Wager[] storage pWagers = players[p1].wagers;
-        require(pWagers.length != 0, "No wagers to be removed");
-        require(pWagers.length - 1 >= wagerIndex, "Index out of bounds");
+    function rmWager(address p1,  uint256 wagerIndex) public {
+        Wager[] storage wagers = players[p1].wagers;
+        require(wagers.length != 0, "No wagers to be removed");
+        require(wagers.length >= wagerIndex + 1, "Index out of bounds");
 
-        pWagers[wagerIndex] = pWagers[pWagers.length - 1];
-        pWagers.pop();
+        wagers[wagerIndex] = wagers[wagers.length - 1];
+        wagers.pop();
     }
 
-    /* for the player */
-    function rmWager(uint8 wagerIndex) public {
-        Wager[] storage pWagers = players[msg.sender].wagers;
-        require(pWagers.length != 0, "No wagers to be removed");
-        require(pWagers.length - 1 >= wagerIndex, "Index out of bounds");
-
-        if (pWagers[wagerIndex].hasP2) {
-            handleForfeit(pWagers[wagerIndex].p2, pWagers[wagerIndex].tokenAmmount);
-        }
-
-        pWagers[wagerIndex] = pWagers[pWagers.length - 1];
-        pWagers.pop();
-    }
-
-    function chooseWinner(Choices _p1, Choices _p2) private view returns(Winner winner) {
+    function chooseWinner(Choices _p1, Choices _p2) public view returns(Winner winner) {
         if (_p1 == _p2) {
             return Winner.DRAW;
         }
@@ -137,9 +121,11 @@ contract Rps {
         return Winner.P2;
     }
 
-    function handleForfeit(address winner, uint256 ammount) private {
-        require(address(this).balance > ammount, "Not enough cash 4");
-        payable(winner).transfer((ammount * 2) - (((ammount * 2) / 100) * TAX_PERCENT));
+    function payoutWithAppliedTax(address winner, uint256 initalBet) public {
+        uint256 ammount = (initalBet * 2) - (((initalBet * 2) / 100) * TAX_PERCENT);
+        require(address(this).balance > ammount, "Not enough tokens in contract");
+
+        payable(winner).transfer(ammount);
     }
 
     function getHashChoice(bytes32 hashChoice, string memory clearChoice) public pure returns (Choices) {
@@ -164,11 +150,9 @@ contract Rps {
         revert("Invalid choice");
     }
 
-    function returnFirstByte(string memory str) public pure returns(bytes1) {
-        return bytes(str)[0];
-    }
+    function rcv() public payable {}
 
-    function timerRanOut(uint timerStart) private view returns (bool){
+    function didTimerRunOut(uint timerStart) private view returns (bool){
         return block.timestamp > timerStart + REVEAL_TIMEOUT;
     }
 
@@ -176,26 +160,28 @@ contract Rps {
         return address(this).balance;
     }
 
-    function listWagers() public view returns(Wager[] memory) {
-        return players[msg.sender].wagers;
+    function listWagers(address player) public view returns(Wager[] memory) {
+        return players[player].wagers;
     }
 
-    function listWager(uint256 wagerIndex) public view returns(Wager memory) {
-        return players[msg.sender].wagers[wagerIndex];
+    function listWager(address player, uint256 wagerIndex) public view returns(Wager memory) {
+        Wager[] memory wagers = players[player].wagers;
+        require(wagers.length >= wagerIndex + 1, "Index out of bounds");
+        return wagers[wagerIndex];
     }
 
     function getTimeLeft(address player, uint wagerIndex) public view returns(uint) {
         Wager[] memory wagers = players[player].wagers;
         require(wagers.length - 1 >= wagerIndex);
         Wager memory wager = wagers[wagerIndex];
-        require(!timerRanOut(wager.timerStart), "Timer already finished");
+        require(!didTimerRunOut(wager.timerStart), "Timer already finished");
         require(wager.hasP2, "Timer didn't start yet");
         return REVEAL_TIMEOUT - (block.timestamp - wager.timerStart);
     }
 
     function getWagerTokenammount(address player, uint wagerIndex) public view returns(uint) {
         Wager[] memory wagers = players[player].wagers;
-        require(wagers.length - 1 >= wagerIndex);
+        require(wagers.length >= wagerIndex + 1, "Index out of bounds");
         Wager memory wager = wagers[wagerIndex];
         return wager.tokenAmmount;
     }
