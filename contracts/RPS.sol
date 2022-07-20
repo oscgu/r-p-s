@@ -3,9 +3,9 @@ pragma solidity ^0.8.9;
 
 contract Rps {
     /* address public constant OWNER = ; */
-    uint constant MIN_BET = 10000000 gwei; // 0.01 eth
+    uint public constant MIN_BET = 10000000 gwei; // 0.01 eth
     uint8 public constant TAX_PERCENT = 5;
-    uint constant REVEAL_TIMEOUT = 48 hours;
+    uint public constant REVEAL_TIMEOUT = 48 hours;
 
     enum Choices {
         ROCK,
@@ -99,11 +99,27 @@ contract Rps {
         }
     }
 
-    /* internal */
+    /* private */
     function rmWager(address p1,  uint256 wagerIndex) public {
         Wager[] storage wagers = players[p1].wagers;
         require(wagers.length != 0, "No wagers to be removed");
         require(wagers.length >= wagerIndex + 1, "Index out of bounds");
+
+        wagers[wagerIndex] = wagers[wagers.length - 1];
+        wagers.pop();
+    }
+
+    /* public */
+    function rmWagerP1(address p1, uint256 wagerIndex) public {
+        require(msg.sender == p1, "You can only remove your own wagers");
+        Wager[] storage wagers = players[msg.sender].wagers;
+        require(wagers.length != 0, "No wagers to be removed");
+        require(wagers.length >= wagerIndex + 1, "Index out of bounds");
+        Wager memory wager = wagers[wagerIndex];
+
+        if (wager.hasP2) {
+            payoutWithAppliedTax(wager.p2, wager.tokenAmmount);
+        }
 
         wagers[wagerIndex] = wagers[wagers.length - 1];
         wagers.pop();
