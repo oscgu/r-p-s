@@ -54,7 +54,7 @@ describe("Rock, Paper, Scissors", function () {
       const weiAmmount = BigNumber.from("100000000000000000"); /* 0.1 Eth */
 
       await rps.connect(p1).mkWager(hashedChoice, { value: weiAmmount });
-      const wager = await rps.connect(p1).listWager(p1.address, 0);
+      const wager = await rps.connect(p1).getWager(p1.address, 0);
 
       expect(wager.p1EncryptedRPSChoice).to.equal(hashedChoice);
       expect(wager.tokenAmmount).to.equal(weiAmmount);
@@ -82,7 +82,7 @@ describe("Rock, Paper, Scissors", function () {
       const wagerIndex = 0;
 
       await rps.connect(p2).joinWager(p1.address, wagerIndex, p2Choice, { value: tokenAmmount });
-      const wager = await rps.connect(p1).listWager(p1.address, wagerIndex);
+      const wager = await rps.connect(p1).getWager(p1.address, wagerIndex);
 
       expect(wager.hasP2).to.equal(true);
       expect(wager.p2).to.equal(p2.address);
@@ -227,7 +227,7 @@ describe("Rock, Paper, Scissors", function () {
       await rps.connect(p2).joinWager(p1.address, wagerIndex, p2Choice, { value: tokenAmmount });
       await rps.connect(p1).resolveWagerP1(wagerIndex, clearChoice);
 
-      await expect(rps.connect(p1).listWager(p1.address, wagerIndex)).to.be.revertedWith("Index out of bounds");
+      await expect(rps.connect(p1).getWager(p1.address, wagerIndex)).to.be.revertedWith("Index out of bounds");
     });
 
     it("Should let p2 resolve the wager if the timer ran out", async function () {
@@ -255,7 +255,7 @@ describe("Rock, Paper, Scissors", function () {
       await rps.connect(p2).resolveWagerP2(p1.address ,wagerIndex);
 
       await expect((await p2.getBalance()).sub(p2Bal)).to.be.approximately(parseEther("0.19"), parseEther("0.01"));
-      await expect(rps.connect(p1).listWager(p1.address, wagerIndex)).to.be.revertedWith("Index out of bounds");
+      await expect(rps.connect(p1).getWager(p1.address, wagerIndex)).to.be.revertedWith("Index out of bounds");
     });
   });
 
@@ -378,7 +378,7 @@ describe("Rock, Paper, Scissors", function () {
 
       await rps.connect(p1).rmWagerP1(p1.address, w1);
       
-      expect(await (await rps.connect(p1).listWager(p1.address, w1)).tokenAmmount).to.equal(weiAmmount2);
+      expect(await (await rps.connect(p1).getWager(p1.address, w1)).tokenAmmount).to.equal(weiAmmount2);
     });
 
     it("Should forfeit if wager has p2", async function() {
