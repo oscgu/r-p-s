@@ -70,8 +70,8 @@ contract Rps {
         Choices p1Choice = getHashChoice(wager.p1EncryptedRPSChoice, movePw);
         Winner winner = chooseWinner(p1Choice, wager.p2Choice);
 
-        rewardWinner(msg.sender, wager.p2, winner, wager.tokenAmmount);
         rmWager(msg.sender, wagerIndex);
+        rewardWinner(msg.sender, wager.p2, winner, wager.tokenAmmount);
     }
 
     function resolveWagerP2(address p1, uint256 wagerIndex) public {
@@ -79,8 +79,8 @@ contract Rps {
         require(wager.hasP2, "Wager doesn't have a second player");
         require(didTimerRunOut(wager.timerStart), "Timer didn't run out yet");
 
-        payoutWithAppliedTax(msg.sender, wager.tokenAmmount);
         rmWager(p1, wagerIndex);
+        payoutWithAppliedTax(msg.sender, wager.tokenAmmount);
     }
 
     function rewardWinner(address p1, address p2, Winner winner, uint256 ammount) public {
@@ -110,12 +110,12 @@ contract Rps {
         Wager[] storage wagers = players[msg.sender].wagers;
         Wager memory wager = getWager(p1, wagerIndex);
 
+        wagers[wagerIndex] = wagers[wagers.length - 1];
+        wagers.pop();
+
         if (wager.hasP2) {
             payoutWithAppliedTax(wager.p2, wager.tokenAmmount);
         }
-
-        wagers[wagerIndex] = wagers[wagers.length - 1];
-        wagers.pop();
     }
 
     function chooseWinner(Choices _p1, Choices _p2) public view returns(Winner winner) {
