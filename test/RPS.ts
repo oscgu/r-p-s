@@ -416,4 +416,39 @@ describe("Rock, Paper, Scissors", function () {
       await expect(rps.connect(p2).rmWagerP1(p1.address, w1)).to.be.revertedWith("You can only remove your own wagers");
     })
   })
+
+  describe("Concurrency Tests", function() {
+    it("Should allow multiple games", async function() {
+      const Rps = await ethers.getContractFactory("Rps");
+      const rps = await Rps.deploy();
+
+      const [p1, p2] = await ethers.getSigners();
+      const wagerIndex = 0;
+      const p2Choice = Choices.PAPER;
+
+      const clearChoice = Choices.PAPER + "-" + "test";
+      const hashedChoice = ethers.utils.soliditySha256(["string"], [clearChoice]);
+
+      const tokenAmmount = ethers.utils.parseEther("0.1");
+
+      for (let i=0; i<100; i++) {
+        await rps.connect(p1).mkWager(hashedChoice, { value: tokenAmmount });
+      }
+
+      for (let i=0; i<100; i++) {
+        await rps.connect(p2).joinWager(p1.address, i, p2Choice, { value: tokenAmmount });
+      }
+
+      const p1Bal = await p1.getBalance();
+      const p2Bal = await  p2.getBalance();
+
+      for (let i=0; i<100; i++) {
+        expect(await rps.connect(p1).resolveWagerP1(wagerIndex, clearChoice)).to.not.reverted;
+      }
+
+      expect(await (await rps.getBalance())).to.be.equal(parseEther("1"));
+      expect(await (await p1.getBalance()).sub(p1Bal)).to.be.approximately(parseEther("10"), parseEther("1"));
+      expect(await (await p2.getBalance()).sub(p2Bal)).to.be.approximately(parseEther("10"), parseEther("1"));
+    })
+  })
 });
